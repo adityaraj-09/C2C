@@ -126,8 +126,24 @@ child cache back into the parent, then `reply()` to the user.
 
 Requires one shared HuggingFace causal LM (no cross-model projector).
 Gold check: inherited-KV greedy tokens equal a full prefill. Instruct
-models use the chat template (prefix-stable ingest) plus a hashed KV
-prefix cache. Ticket A/B: C2C adopt vs a lossy text recap.
+models use the chat template (prefix-stable ingest). Ticket A/B: C2C
+adopt vs a lossy text recap.
+
+**Copy-on-write and prefix cache both run; they are not alternatives.**
+
+* **Copy-on-write** is the agent-to-agent path. `fork` shares the parent
+  `DynamicCache` in O(1). The first side to append (`ingest_env`, `think`,
+  `reply`) clones, then only pays for new tokens. `adopt` replaces the
+  parent timeline with that child cache.
+* **Prefix cache** is engine-level automatic prefix caching (vLLM APC
+  *semantics*, not vLLM itself — this tree is CPU / HuggingFace). Token
+  blocks are hashed; a later prefill of the same prompt reuses KV instead
+  of re-forwarding it. That helps gold vs C2C cells and repeated tickets
+  that share a system/user prefix.
+
+Typical ticket: `fork("explorer")` (CoW) → explorer reads the file
+(clone, then append) → `adopt` → a second runtime on the same user/file
+prefix can hit the prefix cache.
 
 ```bash
 python script/agent/run_transfer_experiment.py
