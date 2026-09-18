@@ -118,6 +118,26 @@ with torch.no_grad():
     print(f"C2C output text: {output_text}")
 ```
 
+### Agent-to-agent C2C (same self-hosted model)
+
+User → agent stays **text**. Agent → subagent is **KV cache only**: fork a
+copy-on-write timeline, let the child ingest files/tests, `adopt` the
+child cache back into the parent, then `reply()` to the user.
+
+Requires one shared HuggingFace causal LM (no cross-model projector).
+Gold check: inherited-KV greedy tokens equal a full prefill. Instruct
+models use the chat template (prefix-stable ingest) plus a hashed KV
+prefix cache. Ticket A/B: C2C adopt vs a lossy text recap.
+
+```bash
+python script/agent/run_transfer_experiment.py
+python script/agent/demo_latent_protocol.py
+python script/agent/run_ticket_ab.py
+python -m pytest test/test_agent_c2c.py test/test_agent_instruct.py -q -o addopts=
+```
+
+See [docs/agent_c2c.md](docs/agent_c2c.md).
+
 ### Run chat example
 
 We provide an interactive chat example to demonstrate cache-to-cache communication with pre-trained projectors in `script/playground/live_chat_example.py`.
