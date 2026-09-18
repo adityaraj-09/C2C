@@ -118,6 +118,22 @@ with torch.no_grad():
     print(f"C2C output text: {output_text}")
 ```
 
+### Agent-to-agent C2C (Semantic Capsules)
+
+The paper fuses two models on the **same prompt**. Agents hold **different
+contexts**. `rosetta.agent` is a communication primitive for that case:
+sliced KV-cache capsules on a latent bus (handoff, consult/Cache-RPC,
+streaming, critique residuals), not another agent framework.
+
+```bash
+python script/agent/demo_latent_protocol.py
+python script/agent/run_transfer_experiment.py
+python -m pytest test/test_agent_c2c.py -q -o addopts=
+```
+
+See [docs/agent_c2c.md](docs/agent_c2c.md) for the architectures and the
+smallest experiment that can falsify the idea.
+
 ### Run chat example
 
 We provide an interactive chat example to demonstrate cache-to-cache communication with pre-trained projectors in `script/playground/live_chat_example.py`.
