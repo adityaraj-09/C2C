@@ -1,61 +1,46 @@
-"""Agent-to-agent communication over Cache-to-Cache.
+"""Same-model agent-to-agent C2C.
 
-This package is a communication primitive, not an agent framework.
+User → agent is text. Agent → agent is a KV capsule. One shared HuggingFace
+causal LM, copy-on-write timelines, join by adopting the child's cache.
 
-The paper's C2C fuses two models at the same token positions of the same
-prompt. Agents do not share a prompt: a planner has a goal, a coder has
-files, a tester has failures. Semantic Capsules let one agent transfer a
-sliced KV region — a piece of *understanding* — into another agent's
-working memory, or let the receiver *query* a remote cache via attention.
+    from rosetta.agent import CodingRuntime, build_tiny_llama
 
-Public surface::
-
-    from rosetta.agent import (
-        SemanticCapsule, LatentBus, C2CProtocol, OverlayMode, Intent,
-    )
+    engine, tok = build_tiny_llama()
+    rt = CodingRuntime(engine, tok)
+    rt.ingest_user("fix the auth cache bug in foo.py")
+    rt.fork("explorer", role="explore")
+    rt.ingest_env("explorer", "class authcache keys on write misses ttl")
+    rt.adopt("parent", "explorer")
+    print(rt.reply())
 """
 
-from rosetta.agent.capsule import (
-    Intent,
-    KVSlice,
-    SemanticCapsule,
-    compose_lineage,
-    empty_kv,
-    extract_heads,
-    extract_layers,
-    extract_span,
-    pool_tokens,
+from rosetta.agent.agent import Agent
+from rosetta.agent.capsule import Capsule, Intent
+from rosetta.agent.engine import SharedCausalEngine
+from rosetta.agent.errors import (
+    AgentC2CError,
+    AgentStateError,
+    CapsuleError,
+    ModelMismatchError,
+    TimelineError,
 )
-from rosetta.agent.overlay import (
-    OverlayMode,
-    LinearKVAdapter,
-    RoleConditionedAdapter,
-    align_layers,
-    overlay,
-    remote_retrieve,
-)
-from rosetta.agent.bus import LatentBus, SlotConflict
-from rosetta.agent.protocol import AgentEndpoint, C2CChannel, C2CProtocol
+from rosetta.agent.kv import clone_cache, model_fingerprint
+from rosetta.agent.runtime import CodingRuntime
+from rosetta.agent.tiny import WordTokenizer, build_tiny_llama
 
 __all__ = [
-    "AgentEndpoint",
-    "C2CChannel",
-    "C2CProtocol",
+    "Agent",
+    "AgentC2CError",
+    "AgentStateError",
+    "Capsule",
+    "CapsuleError",
+    "CodingRuntime",
     "Intent",
-    "KVSlice",
-    "LatentBus",
-    "LinearKVAdapter",
-    "OverlayMode",
-    "RoleConditionedAdapter",
-    "SemanticCapsule",
-    "SlotConflict",
-    "align_layers",
-    "compose_lineage",
-    "empty_kv",
-    "extract_heads",
-    "extract_layers",
-    "extract_span",
-    "overlay",
-    "pool_tokens",
-    "remote_retrieve",
+    "ModelMismatchError",
+    "SharedCausalEngine",
+    "TimelineError",
+    "WordTokenizer",
+    "build_tiny_llama",
+    "clone_cache",
+    "model_fingerprint",
 ]

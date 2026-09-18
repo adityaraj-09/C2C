@@ -118,21 +118,22 @@ with torch.no_grad():
     print(f"C2C output text: {output_text}")
 ```
 
-### Agent-to-agent C2C (Semantic Capsules)
+### Agent-to-agent C2C (same self-hosted model)
 
-The paper fuses two models on the **same prompt**. Agents hold **different
-contexts**. `rosetta.agent` is a communication primitive for that case:
-sliced KV-cache capsules on a latent bus (handoff, consult/Cache-RPC,
-streaming, critique residuals), not another agent framework.
+User → agent stays **text**. Agent → subagent is **KV cache only**: fork a
+copy-on-write timeline, let the child ingest files/tests, `adopt` the
+child cache back into the parent, then `reply()` to the user.
+
+Requires one shared HuggingFace causal LM (no cross-model projector).
+Gold check: inherited-KV greedy tokens equal a full prefill.
 
 ```bash
-python script/agent/demo_latent_protocol.py
 python script/agent/run_transfer_experiment.py
+python script/agent/demo_latent_protocol.py
 python -m pytest test/test_agent_c2c.py -q -o addopts=
 ```
 
-See [docs/agent_c2c.md](docs/agent_c2c.md) for the architectures and the
-smallest experiment that can falsify the idea.
+See [docs/agent_c2c.md](docs/agent_c2c.md).
 
 ### Run chat example
 

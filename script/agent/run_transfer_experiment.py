@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""Run the planted-memory + streaming + tiny-learned C2C experiments."""
+"""Gold check: inherited-KV greedy tokens == full-prefill greedy tokens."""
 
 from __future__ import annotations
 
-import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -12,45 +10,38 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from rosetta.agent.experiment import (
-    format_reports,
-    run_planted_transfer_experiment,
-    run_streaming_experiment,
-    run_tiny_learned_experiment,
-)
+import torch
+
+from rosetta.agent import CodingRuntime, build_tiny_llama
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--learned-steps", type=int, default=120)
-    parser.add_argument("--json-out", type=str, default="")
-    args = parser.parse_args()
+    engine, tok = build_tiny_llama(seed=0)
+    torch.manual_seed(0)
 
-    reports = run_planted_transfer_experiment()
-    print("Planted content-addressable memory")
-    print(format_reports(reports))
-    print()
+    a = torch.randint(12, 50, (1, 11), device=engine.device)
+    b = torch.randint(12, 50, (1, 7), device=engine.device)
+    gold = engine.prefill(torch.cat([a, b], dim=1))
+    g_ids, _, _ = engine.greedy_continue(gold.past, gold.logits, max_new_tokens=8)
+    first = engine.prefill(a)
+    c_ids, _, _ = engine.greedy_continue(first.past, first.logits, max_new_tokens=8, extra_ids=b)
+    assert torch.equal(g_ids, c_ids), (g_ids, c_ids)
+    print("engine gold: inherited KV matches full prefill")
 
-    curve = run_streaming_experiment()
-    print("Streaming understanding (retrieval vs tokens received)")
-    for row in curve:
-        print(f"  t={row['tokens_streamed']:<2}  known={row['known_fact_accuracy']:.2f}  "
-              f"all={row['accuracy']:.2f}")
-    print()
+    rt = CodingRuntime(engine, tok)
+    rt.ingest_user("fix the auth cache bug in foo.py")
+    rt.fork("explorer")
+    rt.ingest_env("explorer", "class authcache keys on write misses ttl")
+    rt.adopt("parent", "explorer")
+    ans = rt.reply(6)
 
-    learned = run_tiny_learned_experiment(steps=args.learned_steps)
-    print("Tiny learned encoder/decoder")
-    for k, v in learned.items():
-        print(f"  {k}: {v:.3f}")
-
-    if args.json_out:
-        payload = {
-            "planted": [r.__dict__ for r in reports],
-            "streaming": curve,
-            "learned": learned,
-        }
-        Path(args.json_out).write_text(json.dumps(payload, indent=2))
-        print(f"\nwrote {args.json_out}")
+    gold_rt = CodingRuntime(engine, tok)
+    gold_rt.ingest_user("fix the auth cache bug in foo.py")
+    gold_rt.ingest_env("parent", "class authcache keys on write misses ttl")
+    gold_ans = gold_rt.reply(6)
+    assert ans == gold_ans, (ans, gold_ans)
+    print("runtime gold: adopt(explorer) matches parent ingest of the same file")
+    print("ok")
 
 
 if __name__ == "__main__":
