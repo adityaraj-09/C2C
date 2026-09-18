@@ -252,7 +252,7 @@ def test_prefix_block_cache_partial_prefix():
     torch.manual_seed(4)
     full = torch.randint(12, 40, (1, 20), device=engine.device)
     engine.prefix_cache = PrefixBlockCache(block_size=4)
-    engine.prefill_from_empty(full[:, :12])
+    engine.prefill_from_empty(full[:, :10])  # two full blocks; last 2 tokens not stored
     engine.prefix_cache.reset_stats()
     step = engine.prefill_from_empty(full)
     gold = engine.prefill(full)
