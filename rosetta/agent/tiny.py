@@ -56,7 +56,17 @@ class WordTokenizer:
         self.unk_token_id = self.stoi["<unk>"]
         self.vocab_size = len(self.itos)
 
-    def encode(self, text: str, add_special: bool = False) -> List[int]:
+    chat_template = None
+
+    def encode(
+        self,
+        text: str,
+        add_special: bool = False,
+        add_special_tokens: bool | None = None,
+        **_kwargs,
+    ) -> List[int]:
+        if add_special_tokens is not None:
+            add_special = add_special_tokens
         pieces = text.replace("\n", " \n ").split()
         ids = []
         if add_special:
@@ -66,7 +76,15 @@ class WordTokenizer:
             ids.append(self.stoi.get(key, self.unk_token_id))
         return ids
 
-    def decode(self, ids: Sequence[int], skip_special: bool = True) -> str:
+    def decode(
+        self,
+        ids: Sequence[int],
+        skip_special: bool = True,
+        skip_special_tokens: bool | None = None,
+        **_kwargs,
+    ) -> str:
+        if skip_special_tokens is not None:
+            skip_special = skip_special_tokens
         special = set(range(len(SPECIAL)))
         words = []
         for i in ids:
@@ -85,6 +103,7 @@ def build_tiny_llama(
     n_heads: int = 4,
     hidden: int = 32,
     seed: int = 0,
+    block_size: int = 4,
 ) -> tuple[SharedCausalEngine, WordTokenizer]:
     tok = tokenizer or WordTokenizer()
     torch.manual_seed(seed)
@@ -108,5 +127,6 @@ def build_tiny_llama(
         model,
         pad_token_id=tok.pad_token_id,
         eos_token_id=tok.eos_token_id,
+        block_size=block_size,
     )
     return engine, tok

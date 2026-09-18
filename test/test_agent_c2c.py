@@ -16,12 +16,14 @@ from rosetta.agent import (
     CodingRuntime,
     Intent,
     ModelMismatchError,
+    PrefixBlockCache,
     TimelineError,
     build_tiny_llama,
 )
 from rosetta.agent.capsule import Capsule as CapsuleCls
 from rosetta.agent.errors import AgentStateError
 from rosetta.agent.kv import crop_prefix
+from rosetta.agent.templates import common_prefix_len
 
 
 def _engine():
@@ -210,3 +212,67 @@ def test_max_seq_len_enforced():
         assert False
     except AgentStateError:
         pass
+
+
+def test_fork_is_copy_on_write():
+    engine, tok = _engine()
+    rt = CodingRuntime(engine, tok, max_seq_len=256)
+    rt.ingest_user("fix the auth cache bug")
+    parent = rt.agents["parent"]
+    child = rt.fork("explorer")
+    assert parent.cache is child.cache
+    assert parent.cache_cow and child.cache_cow
+    parent_len = parent.seq_len
+    rt.ingest_env("explorer", "class authcache misses ttl")
+    assert parent.cache is not child.cache
+    assert parent.seq_len == parent_len
+    assert not child.cache_cow
+    assert parent.cache_cow
+
+
+def test_prefix_block_cache_reuses_hashed_kv():
+    engine, _ = _engine()
+    torch.manual_seed(3)
+    ids = torch.randint(12, 40, (1, 16), device=engine.device)
+    gold = engine.prefill(ids)
+    engine.prefix_cache = PrefixBlockCache(block_size=4)
+    first = engine.prefill_from_empty(ids)
+    assert torch.equal(gold.logits.argmax(-1), first.logits.argmax(-1))
+    engine.prefix_cache.reset_stats()
+    reused = engine.prefill_from_empty(ids)
+    stats = engine.prefix_cache.stats
+    assert stats.tokens_reused == 16
+    assert stats.hits >= 4
+    assert torch.equal(gold.logits.argmax(-1), reused.logits.argmax(-1))
+    assert torch.allclose(gold.logits, reused.logits, atol=1e-4, rtol=1e-4)
+
+
+def test_prefix_block_cache_partial_prefix():
+    engine, _ = _engine()
+    torch.manual_seed(4)
+    full = torch.randint(12, 40, (1, 20), device=engine.device)
+    engine.prefix_cache = PrefixBlockCache(block_size=4)
+    engine.prefill_from_empty(full[:, :12])
+    engine.prefix_cache.reset_stats()
+    step = engine.prefill_from_empty(full)
+    gold = engine.prefill(full)
+    assert engine.prefix_cache.stats.tokens_reused == 8
+    assert torch.equal(step.logits.argmax(-1), gold.logits.argmax(-1))
+
+
+def test_common_prefix_len():
+    assert common_prefix_len([1, 2, 3], [1, 2, 9, 8]) == 2
+    assert common_prefix_len([], [1]) == 0
+    assert common_prefix_len([7], [7]) == 1
+
+
+def test_adopt_restores_chat_messages_on_capsule():
+    engine, tok = _engine()
+    rt = CodingRuntime(engine, tok)
+    rt.ingest_user("fix the auth cache bug")
+    rt.fork("explorer")
+    rt.ingest_env("explorer", "class authcache misses ttl")
+    cap = rt.export("explorer")
+    assert cap.extra["messages"][0]["content"] == "fix the auth cache bug"
+    rt.adopt("parent", cap)
+    assert rt.agents["parent"].messages == rt.agents["explorer"].messages

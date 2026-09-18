@@ -24,8 +24,14 @@ from rosetta.agent.errors import (
     ModelMismatchError,
     TimelineError,
 )
+from rosetta.agent.instruct import (
+    instruct_model_available,
+    load_instruct_engine,
+)
 from rosetta.agent.kv import clone_cache, model_fingerprint
+from rosetta.agent.prefix_cache import PrefixBlockCache
 from rosetta.agent.runtime import CodingRuntime
+from rosetta.agent.tickets import default_tickets, score_ticket, score_ticket_modes
 from rosetta.agent.tiny import WordTokenizer, build_tiny_llama
 
 __all__ = [
@@ -37,10 +43,16 @@ __all__ = [
     "CodingRuntime",
     "Intent",
     "ModelMismatchError",
+    "PrefixBlockCache",
     "SharedCausalEngine",
     "TimelineError",
     "WordTokenizer",
     "build_tiny_llama",
     "clone_cache",
+    "default_tickets",
+    "instruct_model_available",
+    "load_instruct_engine",
     "model_fingerprint",
+    "score_ticket",
+    "score_ticket_modes",
 ]
